@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinema Integration Planner</title>
+<meta name="description" content="Capacity planning for integrating cinemas: effort, capacity, utilisation and delivery time.">
+<style>
+  :root {
+    --bg: #f7f6f3; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6a66;
+    --line: #e3e1db; --accent: #2b4acb; --ok: #1f7a4d; --warn: #a66a00; --bad: #b3261e;
+    --ok-bg: #e6f4ec; --warn-bg: #fff3d6; --bad-bg: #fde8e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --surface: #1e1e1c; --text: #f0efea; --muted: #a09f98;
+      --line: #33332f; --accent: #8ea2ff; --ok: #6fd3a0; --warn: #f0b95a; --bad: #ff8f86;
+      --ok-bg: #16301f; --warn-bg: #352a10; --bad-bg: #3a1a17;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .grid { grid-template-columns: 1fr 1fr; } }
+  section { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .presets button { flex: 1 1 0; min-width: 96px; padding: 10px 12px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); border-radius: 8px; font: inherit; cursor: pointer; }
+  .presets button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .presets button:hover { border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 0.85rem; margin: 8px 0 0; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 0.9rem; margin-bottom: 4px; }
+  input { width: 100%; padding: 10px 12px; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[aria-invalid="true"] { border-color: var(--bad); }
+  .err { color: var(--bad); font-size: 0.82rem; min-height: 1.2em; margin-top: 3px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .metrics { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 760px) { .metrics { grid-template-columns: repeat(3, 1fr); } }
+  .metric { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .metric .k { font-size: 0.78rem; color: var(--muted); }
+  .metric .v { font-size: 1.4rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .metric .u { font-size: 0.8rem; color: var(--muted); }
+  .bar { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 16px 0 8px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .2s; }
+  .status { padding: 12px 14px; border-radius: 10px; font-weight: 550; }
+  .status.ok { background: var(--ok-bg); color: var(--ok); }
+  .status.warn { background: var(--warn-bg); color: var(--warn); }
+  .status.bad { background: var(--bad-bg); color: var(--bad); }
+  .full { grid-column: 1 / -1; }
+  .empty { color: var(--muted); }
+  footer { color: var(--muted); font-size: 0.82rem; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cinema Integration Planner</h1>
+  <p class="sub">Estimate whether a set of cinema integrations fits your time and capacity.</p>
+
+  <div class="grid">
+    <section class="full">
+      <h2>Scenario</h2>
+      <div class="presets" role="group" aria-label="Scenario presets">
+        <button type="button" data-preset="optimistic" aria-pressed="false">Optimistic</button>
+        <button type="button" data-preset="base" aria-pressed="false">Base</button>
+        <button type="button" data-preset="pessimistic" aria-pressed="false">Pessimistic</button>
+      </div>
+      <p class="hint">A preset fills the hours, weekly capacity and timeline. The number of cinemas is yours to set. Editing any field switches to a custom scenario.</p>
+    </section>
+
+    <section>
+      <h2>Inputs</h2>
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="cinemas">Number of cinemas to integrate</label>
+          <input id="cinemas" type="number" inputmode="numeric" step="1" min="1" max="500" value="10">
+          <div class="err" id="err-cinemas" aria-live="polite"></div>
+        </div>
+        <div class="field">
+          <label>Estimated hours per cinema</label>
+          <div class="row3">
+            <div>
+              <input id="research" type="number" inputmode="decimal" step="0.5" min="0" max="500" value="4" aria-label="Research hours per cinema">
+              <div class="hint">Research</div>
+            </div>
+            <div>
+              <input id="dev" type="number" inputmode="decimal" step="0.5" min="0" max="500" value="10" aria-label="Development hours per cinema">
+              <div class="hint">Development</div>
+            </div>
+            <div>
+              <input id="qa" type="number" inputmode="decimal" step="0.5" min="0" max="500" value="3" aria-label="QA hours per cinema">
+              <div class="hint">QA</div>
+            </div>
+          </div>
+          <div class="err" id="err-hours" aria-live="polite"></div>
+        </div>
+        <div class="field">
+          <label for="weekly">Available working hours per week</label>
+          <input id="weekly" type="number" inputmode="decimal" step="0.5" min="0.5" max="168" value="12">
+          <div class="err" id="err-weekly" aria-live="polite"></div>
+        </div>
+        <div class="field">
+          <label for="weeks">Target delivery timeline (weeks)</label>
+          <input id="weeks" type="number" inputmode="numeric" step="1" min="1" max="520" value="12">
+          <div class="err" id="err-weeks" aria-live="polite"></div>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h2>Results</h2>
+      <div id="empty" class="empty" hidden>Fix the highlighted inputs to see results.</div>
+      <div id="results">
+        <div class="metrics">
+          <div class="metric"><div class="k">Total required effort</div><div class="v" id="m-effort">0</div><div class="u">hours</div></div>
+          <div class="metric"><div class="k">Available capacity</div><div class="v" id="m-capacity">0</div><div class="u">hours</div></div>
+          <div class="metric"><div class="k">Capacity utilisation</div><div class="v" id="m-util">0%</div><div class="u">effort / capacity</div></div>
+          <div class="metric"><div class="k">Capacity gap</div><div class="v" id="m-gap">0</div><div class="u" id="m-gap-u">hours</div></div>
+          <div class="metric"><div class="k">Estimated completion</div><div class="v" id="m-eta">0</div><div class="u">weeks</div></div>
+          <div class="metric"><div class="k">Per cinema</div><div class="v" id="m-per">0</div><div class="u">hours</div></div>
+        </div>
+        <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+        <div class="status" id="status" role="status"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>Runs entirely in your browser. No data is stored or sent anywhere.</footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // Presets set hours, weekly capacity and timeline. Cinemas stay as entered.
+  var PRESETS = {
+    optimistic:  { research: 2, dev: 6,  qa: 2, weekly: 16, weeks: 12 },
+    base:        { research: 4, dev: 10, qa: 3, weekly: 12, weeks: 12 },
+    pessimistic: { research: 8, dev: 18, qa: 6, weekly: 8,  weeks: 12 }
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fields = ["cinemas", "research", "dev", "qa", "weekly", "weeks"];
+
+  function parse(id) {
+    var raw = $(id).value.trim();
+    if (raw === "") return NaN;
+    return Number(raw);
+  }
+
+  function round1(n) { return Math.round(n * 10) / 10; }
+  function fmt(n) { return round1(n).toLocaleString("en-GB", { maximumFractionDigits: 1 }); }
+
+  // Pure calculation, kept free of DOM access so it is easy to test.
+  function calculate(v) {
+    var perCinema = v.research + v.dev + v.qa;
+    var effort = v.cinemas * perCinema;
+    var capacity = v.weekly * v.weeks;
+    return {
+      perCinema: perCinema,
+      effort: effort,
+      capacity: capacity,
+      utilisation: effort / capacity * 100,
+      gap: capacity - effort,
+      eta: effort / v.weekly
+    };
+  }
+
+  function validate(v) {
+    var e = {};
+    if (!Number.isInteger(v.cinemas) || v.cinemas < 1 || v.cinemas > 500)
+      e.cinemas = "Enter a whole number from 1 to 500.";
+    ["research", "dev", "qa"].forEach(function (k) {
+      if (!Number.isFinite(v[k]) || v[k] < 0 || v[k] > 500)
+        e.hours = "Each stage needs a number from 0 to 500 hours.";
+    });
+    if (!e.hours && v.research + v.dev + v.qa <= 0)
+      e.hours = "At least one stage must be above 0 hours.";
+    if (!Number.isFinite(v.weekly) || v.weekly < 0.5 || v.weekly > 168)
+      e.weekly = "Enter hours per week from 0.5 to 168.";
+    if (!Number.isInteger(v.weeks) || v.weeks < 1 || v.weeks > 520)
+      e.weeks = "Enter a whole number of weeks from 1 to 520.";
+    return e;
+  }
+
+  function setErrors(e) {
+    var map = { cinemas: ["cinemas"], hours: ["research", "dev", "qa"], weekly: ["weekly"], weeks: ["weeks"] };
+    Object.keys(map).forEach(function (key) {
+      $("err-" + key).textContent = e[key] || "";
+      map[key].forEach(function (id) {
+        if (e[key]) $(id).setAttribute("aria-invalid", "true");
+        else $(id).removeAttribute("aria-invalid");
+      });
+    });
+  }
+
+  function setStatus(cls, text) {
+    var s = $("status");
+    s.className = "status " + cls;
+    s.textContent = text;
+  }
+
+  function render() {
+    var v = {};
+    fields.forEach(function (id) { v[id] = parse(id); });
+    var errors = validate(v);
+    setErrors(errors);
+    var invalid = Object.keys(errors).length > 0;
+    $("results").hidden = invalid;
+    $("empty").hidden = !invalid;
+    if (invalid) return;
+
+    var r = calculate(v);
+    $("m-effort").textContent = fmt(r.effort);
+    $("m-capacity").textContent = fmt(r.capacity);
+    $("m-util").textContent = fmt(r.utilisation) + "%";
+    $("m-per").textContent = fmt(r.perCinema);
+    $("m-eta").textContent = fmt(r.eta);
+    $("m-gap").textContent = (r.gap > 0 ? "+" : "") + fmt(r.gap);
+    $("m-gap-u").textContent = r.gap >= 0 ? "hours spare" : "hours short";
+    $("bar").style.width = Math.min(r.utilisation, 100) + "%";
+    $("bar").style.background = r.utilisation > 100 ? "var(--bad)" : r.utilisation > 85 ? "var(--warn)" : "var(--ok)";
+
+    if (r.utilisation > 100) {
+      setStatus("bad", "Over capacity by " + fmt(-r.gap) + " hours. At this pace delivery takes " + fmt(r.eta) +
+        " weeks, " + fmt(r.eta - v.weeks) + " more than the " + v.weeks + " week target.");
+    } else if (r.utilisation > 85) {
+      setStatus("warn", "Fits, but tightly: " + fmt(r.utilisation) + "% of capacity with only " + fmt(r.gap) +
+        " hours of slack. Done in about " + fmt(r.eta) + " weeks.");
+    } else {
+      setStatus("ok", "Comfortable: " + fmt(r.gap) + " hours of slack. Done in about " + fmt(r.eta) +
+        " weeks against a " + v.weeks + " week target.");
+    }
+  }
+
+  function markPreset(name) {
+    document.querySelectorAll("[data-preset]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.preset === name));
+    });
+  }
+
+  function applyPreset(name) {
+    var p = PRESETS[name];
+    Object.keys(p).forEach(function (k) { $(k).value = p[k]; });
+    markPreset(name);
+    render();
+  }
+
+  document.querySelectorAll("[data-preset]").forEach(function (b) {
+    b.addEventListener("click", function () { applyPreset(b.dataset.preset); });
+  });
+  fields.forEach(function (id) {
+    $(id).addEventListener("input", function () { markPreset(null); render(); });
+  });
+  $("form").addEventListener("submit", function (ev) { ev.preventDefault(); });
+
+  window.__planner = { calculate: calculate, validate: validate };
+  applyPreset("base");
+})();
+</script>
+</body>
+</html>
