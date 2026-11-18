@@ -42,4 +42,8 @@ Presets fill the hours, weekly capacity and timeline. The number of cinemas is l
 | Base | 4 | 10 | 3 | 12 | 12 |
 | Pessimistic | 8 | 18 | 6 | 8 | 12 |
 
+## Scenario comparison
+
+Below the results, a chart compares all three presets for the current number of cinemas. Each scenario shows required effort and capacity as bars on one shared scale, a status badge (same thresholds as above), the gap and the estimated completion. It uses the preset values, not the hours typed into the form, so it stays a fixed point of reference while you edit.
+
 Example, base preset with 10 cinemas: effort = 10 × 17 = 170 h, capacity = 12 × 12 = 144 h, utilisation = 118.1%, gap = −26 h, completion = 14.2 weeks.

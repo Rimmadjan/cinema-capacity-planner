@@ -55,6 +55,28 @@
   .status.ok { background: var(--ok-bg); color: var(--ok); }
   .status.warn { background: var(--warn-bg); color: var(--warn); }
   .status.bad { background: var(--bad-bg); color: var(--bad); }
+  .cmp-row { padding: 14px 0; border-top: 1px solid var(--line); }
+  .cmp-row:first-of-type { border-top: 0; padding-top: 0; }
+  .cmp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .cmp-name { font-weight: 600; }
+  .cmp-name small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .cmp-badge { font-size: 0.8rem; font-weight: 600; padding: 2px 10px; border-radius: 99px; }
+  .cmp-badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .cmp-badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .cmp-badge.bad { background: var(--bad-bg); color: var(--bad); }
+  .cmp-bar { display: grid; grid-template-columns: 70px 1fr 64px; align-items: center; gap: 10px; font-size: 0.82rem; margin: 4px 0; }
+  .cmp-bar .lbl { color: var(--muted); }
+  .cmp-bar .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .cmp-track { height: 12px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .cmp-track i { display: block; height: 100%; border-radius: 99px; }
+  .cmp-track i.effort.ok { background: var(--ok); }
+  .cmp-track i.effort.warn { background: var(--warn); }
+  .cmp-track i.effort.bad { background: var(--bad); }
+  .cmp-track i.cap { background: var(--accent); opacity: .55; }
+  .cmp-meta { color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+  .legend { display: flex; gap: 16px; font-size: 0.8rem; color: var(--muted); margin-bottom: 12px; flex-wrap: wrap; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 99px; margin-right: 6px; background: var(--ok); }
+  .legend span.c::before { background: var(--accent); opacity: .55; }
   .full { grid-column: 1 / -1; }
   .empty { color: var(--muted); }
   footer { color: var(--muted); font-size: 0.82rem; margin-top: 20px; }
@@ -129,6 +151,16 @@
         </div>
         <div class="bar" aria-hidden="true"><i id="bar"></i></div>
         <div class="status" id="status" role="status"></div>
+      </div>
+    </section>
+
+    <section class="full" id="compare">
+      <h2>Scenario comparison</h2>
+      <div id="cmp-empty" class="empty" hidden>Enter a valid number of cinemas to compare scenarios.</div>
+      <div id="cmp-body">
+        <div class="legend"><span>Required effort</span><span class="c">Capacity</span></div>
+        <div id="cmp-rows"></div>
+        <p class="hint" id="cmp-note"></p>
       </div>
     </section>
   </div>
@@ -208,11 +240,69 @@
     s.textContent = text;
   }
 
+  function statusOf(util) { return util > 100 ? "bad" : util > 85 ? "warn" : "ok"; }
+  var STATUS_TEXT = { ok: "Comfortable", warn: "Tight", bad: "Over capacity" };
+
+  // Compares all three presets for the current number of cinemas.
+  function renderComparison(cinemas) {
+    var ok = Number.isInteger(cinemas) && cinemas >= 1 && cinemas <= 500;
+    $("cmp-empty").hidden = ok;
+    $("cmp-body").hidden = !ok;
+    if (!ok) return;
+
+    var names = ["optimistic", "base", "pessimistic"];
+    var results = names.map(function (n) {
+      var p = PRESETS[n];
+      return { name: n, p: p, r: calculate({ cinemas: cinemas, research: p.research, dev: p.dev, qa: p.qa, weekly: p.weekly, weeks: p.weeks }) };
+    });
+    var max = Math.max.apply(null, results.map(function (x) { return Math.max(x.r.effort, x.r.capacity); }));
+    var box = $("cmp-rows");
+    box.textContent = "";
+
+    function bar(label, value, cls) {
+      var row = document.createElement("div");
+      row.className = "cmp-bar";
+      var l = document.createElement("span"); l.className = "lbl"; l.textContent = label;
+      var t = document.createElement("div"); t.className = "cmp-track";
+      var i = document.createElement("i"); i.className = cls; i.style.width = (value / max * 100) + "%";
+      t.appendChild(i);
+      var n = document.createElement("span"); n.className = "num"; n.textContent = fmt(value) + " h";
+      row.appendChild(l); row.appendChild(t); row.appendChild(n);
+      return row;
+    }
+
+    results.forEach(function (x) {
+      var s = statusOf(x.r.utilisation);
+      var wrap = document.createElement("div");
+      wrap.className = "cmp-row";
+      var head = document.createElement("div"); head.className = "cmp-head";
+      var nm = document.createElement("span"); nm.className = "cmp-name";
+      nm.textContent = x.name.charAt(0).toUpperCase() + x.name.slice(1);
+      var sm = document.createElement("small");
+      sm.textContent = fmt(x.r.perCinema) + " h per cinema, " + x.p.weekly + " h/week";
+      nm.appendChild(sm);
+      var badge = document.createElement("span"); badge.className = "cmp-badge " + s;
+      badge.textContent = STATUS_TEXT[s] + " · " + fmt(x.r.utilisation) + "%";
+      head.appendChild(nm); head.appendChild(badge);
+      wrap.appendChild(head);
+      wrap.appendChild(bar("Effort", x.r.effort, "effort " + s));
+      wrap.appendChild(bar("Capacity", x.r.capacity, "cap"));
+      var meta = document.createElement("div"); meta.className = "cmp-meta";
+      meta.textContent = (x.r.gap >= 0 ? fmt(x.r.gap) + " h spare" : fmt(-x.r.gap) + " h short") +
+        " · done in about " + fmt(x.r.eta) + " weeks";
+      wrap.appendChild(meta);
+      box.appendChild(wrap);
+    });
+    $("cmp-note").textContent = "Based on " + cinemas + " cinemas and a " + PRESETS.base.weeks +
+      " week target in every scenario. Bars share one scale.";
+  }
+
   function render() {
     var v = {};
     fields.forEach(function (id) { v[id] = parse(id); });
     var errors = validate(v);
     setErrors(errors);
+    renderComparison(v.cinemas);
     var invalid = Object.keys(errors).length > 0;
     $("results").hidden = invalid;
     $("empty").hidden = !invalid;
